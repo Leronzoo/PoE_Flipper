@@ -88,12 +88,11 @@ const PROXIES = [
     url => `https://cors-anywhere.herokuapp.com/${url}`,
 ]
 
-
 async function fetchNinja(url) {
     const urlComCache = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now()
     for (const proxy of PROXIES) {
         try {
-            const res = await fetch(proxy(urlComCache), { signal: AbortSignal.timeout(8000) })
+            const res = await fetch(proxy(urlComCache), { signal: AbortSignal.timeout(15000) })
             if (!res.ok) continue
             const data = await res.json()
             if (data && (data.lines || data.currencyDetails)) return data
@@ -210,21 +209,20 @@ async function atualizar() {
                 </tr>`
             }).join("") || `<tr><td colspan="4" class="empty">Nenhum dado</td></tr>`
 
-        // ── ITEMS ──
-        setStatus("Baixando gems...")
-        const gemsData = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem`)
+        // ── ITEMS: busca tudo em paralelo ──
+        setStatus("Baixando items...")
 
-        setStatus("Baixando scarabs...")
-        const scarabData = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`)
+        const [gemsData, scarabData, ...uniqDatas] = await Promise.all([
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueWeapon`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueArmour`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueAccessory`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueJewel`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueFlask`),
+        ])
 
-        setStatus("Baixando uniques...")
-        const uniqTypes = ["UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueJewel", "UniqueFlask"]
-        const uniqLines = []
-        for (const tipo of uniqTypes) {
-            const d = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=${tipo}`)
-            for (const it of d.lines || []) uniqLines.push(it)
-        }
-
+        const uniqLines = uniqDatas.flatMap(d => d?.lines || [])
         const scarabs = buildIndex(scarabData.lines || [])
         const uniques = buildIndex(uniqLines)
 
@@ -238,7 +236,6 @@ async function atualizar() {
             if (!gems[it.name] || it.chaosValue < gems[it.name]) gems[it.name] = it.chaosValue
         }
 
-        // DEBUG: loga as primeiras 10 chaves pra ver o formato real
         console.log("Amostra de keys gems:", Object.keys(gems).filter(k => k.includes("|")).slice(0, 10))
 
         const printRecipe = (nome, custo, venda) => {
@@ -275,7 +272,6 @@ async function atualizar() {
             if (r) recipesItems.push(r)
         }
 
-        // Scarabs 3x -> tier superior
         const SCARAB_TIERS = [
             ["Cartography Scarab",  "Cartography Scarab of Corruption"],
             ["Bestiary Scarab",     "Bestiary Scarab of the Wilds"],
