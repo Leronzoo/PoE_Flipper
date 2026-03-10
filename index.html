@@ -88,7 +88,6 @@ const PROXIES = [
     url => `https://cors-anywhere.herokuapp.com/${url}`,
 ]
 
-
 async function fetchNinja(url) {
     const urlComCache = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now()
     for (const proxy of PROXIES) {
@@ -213,27 +212,25 @@ async function atualizar() {
         // ── ITEMS: busca tudo em paralelo ──
         setStatus("Baixando items...")
 
-const [gemsData1, gemsData2, scarabData, ...uniqDatas] = await Promise.all([
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=active`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=support`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueWeapon`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueArmour`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueAccessory`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueJewel`),
-    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueFlask`),
-])
+        const [gemsData1, gemsData2, scarabData, ...uniqDatas] = await Promise.all([
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=active`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=support`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueWeapon`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueArmour`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueAccessory`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueJewel`),
+            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueFlask`),
+        ])
 
-const gemsLines = [...(gemsData1?.lines || []), ...(gemsData2?.lines || [])]
-
-
+        const gemsLines = [...(gemsData1?.lines || []), ...(gemsData2?.lines || [])]
         const uniqLines = uniqDatas.flatMap(d => d?.lines || [])
-        const scarabs = buildIndex(scarabData.lines || [])
-        const uniques = buildIndex(uniqLines)
+        const scarabs   = buildIndex(scarabData.lines || [])
+        const uniques   = buildIndex(uniqLines)
 
         // ── INDEX GEMS ──
         const gems = {}
-        for (const it of gemsData.lines || []) {
+        for (const it of gemsLines) {   // ← era gemsData.lines
             const lvl = it.gemLevel   != null ? it.gemLevel   : 0
             const q   = it.gemQuality != null ? it.gemQuality : 0
             const key = `${it.name}|lvl${lvl}|q${q}`
@@ -248,6 +245,7 @@ const gemsLines = [...(gemsData1?.lines || []), ...(gemsData2?.lines || [])]
             const lucro  = venda - custo
             const margem = custo > 0 ? lucro / custo : 1
             if (margem < MARGEM) return null
+            if (lucro < 5) return null   // ← filtro de ruído
             return { nome, custo, venda, lucro }
         }
 
@@ -322,15 +320,16 @@ const gemsLines = [...(gemsData1?.lines || []), ...(gemsData2?.lines || [])]
 
         // Loreweave
         let minRing = null, ringNome = null
-        const ringNames = new Set([
+        const RING_NAMES = new Set([
             "Blackheart", "Le Heup of All", "Ventor's Gamble", "Pyre",
             "Tasalio's Sign", "Valako's Sign", "Ngamahu's Sign",
             "Circle of Anguish", "Circle of Fear", "Circle of Guilt",
             "Circle of Nostalgia", "Circle of Regret", "Precursor's Emblem",
         ])
+        const NAO_RING = /staff|bow|axe|sword|mace|shield|helmet|glove|boot|belt|flask|jewel/i
         for (const [nome, valor] of Object.entries(uniques)) {
-            const isRing = nome.toLowerCase().includes("ring") || ringNames.has(nome)
-            if (valor > 0 && isRing && (!minRing || valor < minRing)) {
+            const isRing = RING_NAMES.has(nome) || /ring/i.test(nome)
+            if (valor > 0 && isRing && !NAO_RING.test(nome) && (!minRing || valor < minRing)) {
                 minRing = valor
                 ringNome = nome
             }
