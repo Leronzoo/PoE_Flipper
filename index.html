@@ -213,15 +213,19 @@ async function atualizar() {
         // ── ITEMS: busca tudo em paralelo ──
         setStatus("Baixando items...")
 
-        const [gemsData, scarabData, ...uniqDatas] = await Promise.all([
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueWeapon`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueArmour`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueAccessory`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueJewel`),
-            fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueFlask`),
-        ])
+const [gemsData1, gemsData2, scarabData, ...uniqDatas] = await Promise.all([
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=active`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem&gemType=support`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueWeapon`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueArmour`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueAccessory`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueJewel`),
+    fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=UniqueFlask`),
+])
+
+const gemsLines = [...(gemsData1?.lines || []), ...(gemsData2?.lines || [])]
+
 
         const uniqLines = uniqDatas.flatMap(d => d?.lines || [])
         const scarabs = buildIndex(scarabData.lines || [])
