@@ -82,10 +82,12 @@
 
 <script>
 const PROXIES = [
+    url => `https://proxy.corsfix.com/?${url}`,
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    url => `https://proxy.cors.sh/${url}`,
+    url => `https://cors-anywhere.herokuapp.com/${url}`,
 ]
+
 
 async function fetchNinja(url) {
     const urlComCache = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now()
