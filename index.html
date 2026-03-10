@@ -81,12 +81,12 @@
 </section>
 
 <script>
-const PROXY = "https://corsproxy.io/?url="
 
 async function fetchNinja(url) {
-    const res = await fetch(url)
+    const res = await fetch(url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now())
     return res.json()
 }
+
 
 
 function fmt(n)  { return n.toFixed(2) }
@@ -224,13 +224,14 @@ async function atualizar() {
             if (!gems[it.name] || it.chaosValue < gems[it.name]) gems[it.name] = it.chaosValue
         }
 
-        const printRecipe = (nome, custo, venda) => {
-            if (custo == null || custo <= 0 || venda == null) return null
-            const lucro  = venda - custo
-            const margem = lucro / custo
-            if (margem < MARGEM) return null
-            return { nome, custo, venda, lucro }
-        }
+const printRecipe = (nome, custo, venda) => {
+    if (custo == null || venda == null || venda <= 0) return null  // remove o custo <= 0
+    const lucro  = venda - custo
+    const margem = custo > 0 ? lucro / custo : 1
+    if (margem < MARGEM) return null
+    return { nome, custo, venda, lucro }
+}
+
 
         // ── PARTE 3: ITEMS -> CURRENCY ──
         const recipesItems = []
