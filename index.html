@@ -40,7 +40,7 @@
 <p class="subtitle">Arbitragem de currency + vendor recipes lucrativas em tempo real</p>
 
 <div class="controls">
-    <label>League: <input id="league" type="text" value="Settlers" style="width:140px"></label>
+    <label>League: <input id="league" type="text" value="Mirage" style="width:140px"></label>
     <label>Margem mínima: <input id="margem" type="number" value="10" min="1" max="100" style="width:70px"> %</label>
     <label>Min listings: <input id="listings" type="number" value="10" min="1" style="width:60px"></label>
     <button id="btnAtualizar" onclick="atualizar()">▶ Atualizar</button>
@@ -82,11 +82,13 @@
 
 <script>
 const PROXIES = [
-    url => `https://proxy.corsfix.com/?${url}`,
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    url => `https://proxy.corsfix.com/?${url}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     url => `https://cors-anywhere.herokuapp.com/${url}`,
 ]
+
 
 async function fetchNinja(url) {
     const urlComCache = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now()
