@@ -82,8 +82,11 @@
 
 <script>
 
+const PROXY = "https://api.allorigins.win/raw?url="
+
 async function fetchNinja(url) {
-    const res = await fetch(url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now())
+    const urlComCache = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now()
+    const res = await fetch(PROXY + encodeURIComponent(urlComCache))
     return res.json()
 }
 
