@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoE Flipper</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0d0d0d; color: #c8b89a; font-family: 'Segoe UI', monospace; padding: 20px; }
+        h1 { color: #af6025; font-size: 1.6rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
+        .controls { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .controls label { color: #888; font-size: 0.85rem; }
+        .controls input, .controls select {
+            background: #1a1a1a; border: 1px solid #333; color: #c8b89a;
+            padding: 6px 10px; border-radius: 4px; font-size: 0.85rem;
+        }
+        button {
+            background: #af6025; color: #fff; border: none;
+            padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+        }
+        button:hover { background: #c87030; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        .status { color: #666; font-size: 0.8rem; margin-left: 8px; }
+        section { margin-bottom: 32px; }
+        h2 { color: #af6025; font-size: 1rem; margin-bottom: 8px; border-bottom: 1px solid #222; padding-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        th { background: #1a1a1a; color: #888; text-align: left; padding: 6px 10px; border-bottom: 1px solid #222; }
+        td { padding: 5px 10px; border-bottom: 1px solid #1a1a1a; }
+        tr:hover td { background: #151515; }
+        .lucro-pos { color: #4caf50; font-weight: bold; }
+        .lucro-neg { color: #f44336; }
+        .badge { background: #1e3a1e; color: #4caf50; padding: 1px 6px; border-radius: 3px; font-size: 0.75rem; }
+        .empty { color: #444; font-style: italic; padding: 10px 0; font-size: 0.85rem; }
+        .arrow { color: #af6025; }
+    </style>
+</head>
+<body>
+
+<h1>⚗️ PoE Flipper</h1>
+<p class="subtitle">Arbitragem de currency + vendor recipes lucrativas em tempo real</p>
+
+<div class="controls">
+    <label>League:
+        <input id="league" type="text" value="Settlers" style="width:140px">
+    </label>
+    <label>Margem mínima:
+        <input id="margem" type="number" value="10" min="1" max="100" style="width:70px"> %
+    </label>
+    <label>Min listings:
+        <input id="listings" type="number" value="10" min="1" style="width:60px">
+    </label>
+    <button id="btnAtualizar" onclick="atualizar()">▶ Atualizar</button>
+    <span class="status" id="status"></span>
+</div>
+
+<!-- PARTE 1 -->
+<section>
+    <h2>💱 Arbitragem Currency</h2>
+    <p style="color:#555;font-size:0.78rem;margin-bottom:8px;">
+        Fluxo: você GASTA chaos → COMPRA moeda → VENDE por chaos → LUCRO
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Moeda</th>
+                <th>Compra por (Ask)</th>
+                <th>Vende por (Bid)</th>
+                <th>Lucro/unid</th>
+                <th>Margem %</th>
+                <th>Listings</th>
+            </tr>
+        </thead>
+        <tbody id="tbl-arbitragem"><tr><td colspan="6" class="empty">Clique em Atualizar</td></tr></tbody>
+    </table>
+</section>
+
+<!-- PARTE 2 -->
+<section>
+    <h2>🔄 Vendor Recipes Currency → Currency</h2>
+    <table>
+        <thead>
+            <tr><th>Recipe</th><th>Custo (c)</th><th>Resultado (c)</th><th>Lucro (c)</th></tr>
+        </thead>
+        <tbody id="tbl-recipe-currency"><tr><td colspan="4" class="empty">Clique em Atualizar</td></tr></tbody>
+    </table>
+</section>
+
+<!-- PARTE 3 -->
+<section>
+    <h2>💎 Vendor Recipes Items → Currency</h2>
+    <table>
+        <thead>
+            <tr><th>Recipe</th><th>Custo (c)</th><th>Resultado (c)</th><th>Lucro (c)</th></tr>
+        </thead>
+        <tbody id="tbl-recipe-items"><tr><td colspan="4" class="empty">Clique em Atualizar</td></tr></tbody>
+    </table>
+</section>
+
+<!-- PARTE 4 -->
+<section>
+    <h2>⚔️ Vendor Recipes Uniques Combináveis</h2>
+    <table>
+        <thead>
+            <tr><th>Recipe</th><th>Custo (c)</th><th>Venda mín (c)</th><th>Lucro (c)</th></tr>
+        </thead>
+        <tbody id="tbl-recipe-uniques"><tr><td colspan="4" class="empty">Clique em Atualizar</td></tr></tbody>
+    </table>
+</section>
+
+<script>
+const PROXY = "https://corsproxy.io/?url="
+
+async function fetchNinja(url) {
+    const res = await fetch(PROXY + encodeURIComponent(url))
+    return res.json()
+}
+
+function fmt(n) { return n.toFixed(2) }
+function pct(n) { return (n * 100).toFixed(1) + "%" }
+
+function lucroCell(v) {
+    const cls = v > 0 ? "lucro-pos" : "lucro-neg"
+    return `<td class="${cls}">${fmt(v)}c ${v > 0 ? '<span class="badge"><<<</span>' : ''}</td>`
+}
+
+function setStatus(msg) {
+    document.getElementById("status").textContent = msg
+}
+
+function buildIndex(itens) {
+    const idx = {}
+    for (const it of itens) {
+        if (!idx[it.name] || it.chaosValue < idx[it.name])
+            idx[it.name] = it.chaosValue
+    }
+    return idx
+}
+
+async function atualizar() {
+    const btn = document.getElementById("btnAtualizar")
+    btn.disabled = true
+    setStatus("Baixando...")
+
+    const LEAGUE    = document.getElementById("league").value.trim()
+    const MARGEM    = parseFloat(document.getElementById("margem").value) / 100
+    const MIN_LIST  = parseInt(document.getElementById("listings").value)
+
+    const BASE = "https://poe.ninja/api/data/"
+
+    try {
+        // ── CURRENCY ──
+        setStatus("Baixando currency...")
+        const currData = await fetchNinja(`${BASE}currencyoverview?league=${LEAGUE}&type=Currency`)
+
+        const dados = {}
+        for (const d of currData.currencyDetails || []) {
+            dados[d.name] = dados[d.name] || { chaos: 0, ask: null, bid: null, pay_listings: 0, recv_listings: 0 }
+        }
+        for (const linha of currData.lines || []) {
+            const nome = linha.currencyTypeName
+            const pay  = linha.pay
+            const recv = linha.receive
+            dados[nome] = {
+                chaos:         linha.chaosEquivalent || 0,
+                ask:           recv ? recv.value : null,
+                bid:           pay && pay.value > 0 ? (1 / pay.value) : null,
+                pay_listings:  pay  ? (pay.listing_count  || 0) : 0,
+                recv_listings: recv ? (recv.listing_count || 0) : 0,
+            }
+        }
+
+        const precoCurrency = nome => dados[nome]?.chaos || null
+
+        // ── PARTE 1: ARBITRAGEM ──
+        const arbitragem = []
+        for (const [nome, d] of Object.entries(dados)) {
+            if (!d.ask || !d.bid || d.ask <= 0 || d.bid <= 0) continue
+            if (d.pay_listings < MIN_LIST || d.recv_listings < MIN_LIST) continue
+            const lucro  = d.bid - d.ask
+            const margem = lucro / d.ask
+            if (margem >= MARGEM)
+                arbitragem.push({ nome, ask: d.ask, bid: d.bid, lucro, margem, listings: Math.min(d.pay_listings, d.recv_listings) })
+        }
+        arbitragem.sort((a, b) => b.margem - a.margem)
+
+        const tblArb = document.getElementById("tbl-arbitragem")
+        if (arbitragem.length === 0) {
+            tblArb.innerHTML = `<tr><td colspan="6" class="empty">Nenhum flip encontrado</td></tr>`
+        } else {
+            tblArb.innerHTML = arbitragem.map(it => `
+                <tr>
+                    <td><b>${it.nome}</b></td>
+                    <td>${fmt(it.ask)}c</td>
+                    <td>${fmt(it.bid)}c</td>
+                    ${lucroCell(it.lucro)}
+                    <td>${pct(it.margem)}</td>
+                    <td>${it.listings}</td>
+                </tr>`).join("")
+        }
+
+        // ── PARTE 2: VENDOR RECIPES CURRENCY ──
+        const RECIPES_CURRENCY = [
+            { nome: "3x Alteration → 1x Augmentation", ing: [["Orb of Alteration", 3]], res: ["Orb of Augmentation", 1] },
+            { nome: "4x Jeweller's → 1x Fusing",        ing: [["Jeweller's Orb", 4]],   res: ["Orb of Fusing", 1] },
+            { nome: "2x Fusing → 1x Jeweller's",        ing: [["Orb of Fusing", 2]],     res: ["Jeweller's Orb", 1] },
+            { nome: "4x Fusing → 1x Chisel",            ing: [["Orb of Fusing", 4]],     res: ["Cartographer's Chisel", 1] },
+            { nome: "20x Chisel → 1x Chaos",            ing: [["Cartographer's Chisel", 20]], res: ["Chaos Orb", 1] },
+            { nome: "20x Chaos → 1x Exalted",           ing: [["Chaos Orb", 20]],        res: ["Exalted Orb", 1] },
+        ]
+
+        const tblRC = document.getElementById("tbl-recipe-currency")
+        tblRC.innerHTML = RECIPES_CURRENCY.map(r => {
+            let custo = 0, ok = true
+            for (const [nome, qtd] of r.ing) {
+                const p = precoCurrency(nome)
+                if (!p) { ok = false; break }
+                custo += p * qtd
+            }
+            if (!ok) return ""
+            const res_p = precoCurrency(r.res[0])
+            if (!res_p) return ""
+            const resultado = res_p * r.res[1]
+            const lucro = resultado - custo
+            return `<tr>
+                <td>${r.nome}</td>
+                <td>${fmt(custo)}c</td>
+                <td>${fmt(resultado)}c</td>
+                ${lucroCell(lucro)}
+            </tr>`
+        }).join("") || `<tr><td colspan="4" class="empty">Nenhum dado</td></tr>`
+
+        // ── ITEMS ──
+        setStatus("Baixando gems...")
+        const gemsData   = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=SkillGem`)
+        setStatus("Baixando scarabs...")
+        const scarabData = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=Scarab`)
+        setStatus("Baixando uniques...")
+        const uniqTypes  = ["UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueJewel", "UniqueFlask"]
+        const uniqLines  = []
+        for (const tipo of uniqTypes) {
+            const d = await fetchNinja(`${BASE}itemoverview?league=${LEAGUE}&type=${tipo}`)
+            for (const it of d.lines || []) uniqLines.push(it)
+        }
+
+        const scarabs = buildIndex(scarabData.lines || [])
+        const uniques = buildIndex(uniqLines)
+
+        // gems index por nome|lvlX|qY
+        const gems = {}
+        for (const it of gemsData.lines || []) {
+            const key = `${it.name}|lvl${it.gemLevel ?? 0}|q${it.gemQuality ?? 0}`
+            if (!gems[key] || it.chaosValue < gems[key]) gems[key] = it.chaosValue
+            if (!gems[it.name] || it.chaosValue < gems[it.name]) gems[it.name] = it.chaosValue
+        }
+
+        const printRecipe = (nome, custo, venda) => {
+            if (!custo || custo <= 0 || !venda) return null
+            const lucro  = venda - custo
+            const margem = lucro / custo
+            if (margem < MARGEM) return null
+            return { nome, custo, venda, lucro }
+        }
+
+        // ── PARTE 3: ITEMS -> CURRENCY ──
+        const recipesItems = []
+
+        // Gems lvl20 -> lvl1 q20
+        const gemsDone = new Set()
+        for (const key of Object.keys(gems)) {
+            const base = key.split("|")[0]
+            if (gemsDone.has(base)) continue
+            const custo     = gems[`${base}|lvl20|q0`] || gems[`${base}|lvl20`]
+            const resultado = gems[`${base}|lvl1|q20`] || gems[`${base}|lvl20|q20`]
+            const r = printRecipe(`Gem: ${base} (lvl20 → lvl1 q20)`, custo, resultado)
+            if (r) { recipesItems.push(r); gemsDone.add(base) }
+        }
+
+        // Scarabs 3x -> tier superior
+        const SCARAB_TIERS = [
+            ["Cartography Scarab",  "Cartography Scarab of Corruption"],
+            ["Bestiary Scarab",     "Bestiary Scarab of the Wilds"],
+            ["Harbinger Scarab",    "Harbinger Scarab of Regency"],
+            ["Legion Scarab",       "Legion Scarab of the Eternal Conflict"],
+            ["Expedition Scarab",   "Expedition Scarab of Excess"],
+            ["Breach Scarab",       "Breach Scarab of Commanding"],
+            ["Abyss Scarab",        "Abyss Scarab of the Abyss"],
+            ["Ritual Scarab",       "Ritual Scarab of Wisps"],
+            ["Delirium Scarab",     "Delirium Scarab of Anguish"],
+            ["Blight Scarab",       "Blight Scarab of Blooming"],
+        ]
+        for (const [base, sup] of SCARAB_TIERS) {
+            const r = printRecipe(`3x ${base} → ${sup}`, (scarabs[base] || 0) * 3, scarabs[sup])
+            if (r) recipesItems.push(r)
+        }
+
+        recipesItems.sort((a, b) => b.lucro - a.lucro)
+        const tblRI = document.getElementById("tbl-recipe-items")
+        tblRI.innerHTML = recipesItems.length
+            ? recipesItems.map(r => `<tr>
+                <td>${r.nome}</td>
+                <td>${fmt(r.custo)}c</td>
+                <td>${fmt(r.venda)}c</td>
+                ${lucroCell(r.lucro)}
+              </tr>`).join("")
+            : `<tr><td colspan="4" class="empty">Nenhuma recipe lucrativa encontrada</td></tr>`
+
+        // ── PARTE 4: UNIQUES COMBINAVEIS ──
+        const recipesUniq = []
+
+        const ru = [
+            {
+                nome: "The Anima Stone",
+                ing:  ["Primordial Might", "Primordial Harmony", "Primordial Eminence"],
+                res:  "The Anima Stone"
+            },
+            {
+                nome: "The Taming",
+                ing:  ["Berek's Pass", "Berek's Grip", "Berek's Respite"],
+                res:  "The Taming"
+            },
+            {
+                nome: "Arborix",
+                ing:  ["Grelwood Shank", "Beltimber Blade"],
+                res:  "Arborix",
+                extra: precoCurrency("Orb of Fusing") || 0
+            },
+        ]
+
+        for (const r of ru) {
+            let custo = (r.extra || 0)
+            for (const nome of r.ing) custo += uniques[nome] || 0
+            const rec = printRecipe(r.nome, custo, uniques[r.res])
+            if (rec) recipesUniq.push(rec)
+        }
+
+        // Loreweave
+        let minRing = null, ringNome = null
+        for (const [nome, valor] of Object.entries(uniques)) {
+            if (valor > 0 && (nome.includes("Ring") || nome === "Blackheart" || nome === "Le Heup of All")) {
+                if (!minRing || valor < minRing) { minRing = valor; ringNome = nome }
+            }
+        }
+        if (minRing && uniques["Loreweave"]) {
+            const r = printRecipe(`Loreweave (60x ${ringNome})`, minRing * 60, uniques["Loreweave"])
+            if (r) recipesUniq.push(r)
+        }
+
+        const tblRU = document.getElementById("tbl-recipe-uniques")
+        tblRU.innerHTML = recipesUniq.length
+            ? recipesUniq.map(r => `<tr>
+                <td>${r.nome}</td>
+                <td>${fmt(r.custo)}c</td>
+                <td>${fmt(r.venda)}c</td>
+                ${lucroCell(r.lucro)}
+              </tr>`).join("")
+            : `<tr><td colspan="4" class="empty">Nenhuma recipe lucrativa encontrada</td></tr>`
+
+        setStatus("✓ Atualizado em " + new Date().toLocaleTimeString())
+
+    } catch (e) {
+        setStatus("Erro: " + e.message)
+        console.error(e)
+    }
+
+    btn.disabled = false
+}
+</script>
+</body>
+</html>
