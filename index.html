@@ -81,7 +81,6 @@
 </section>
 
 <script>
-
 const PROXIES = [
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
@@ -102,8 +101,6 @@ async function fetchNinja(url) {
     }
     throw new Error("Todos os proxies falharam")
 }
-
-
 
 function fmt(n)  { return n.toFixed(2) }
 function pct(n)  { return (n * 100).toFixed(1) + "%" }
@@ -137,7 +134,6 @@ async function atualizar() {
     const BASE     = "https://poe.ninja/api/data/"
 
     try {
-        // ── CURRENCY ──
         setStatus("Baixando currency...")
         const currData = await fetchNinja(`${BASE}currencyoverview?league=${LEAGUE}&type=Currency`)
 
@@ -183,12 +179,12 @@ async function atualizar() {
 
         // ── PARTE 2: VENDOR RECIPES CURRENCY ──
         const RECIPES_CURRENCY = [
-            { nome: "3x Alteration → 1x Augmentation", ing: [["Orb of Alteration", 3]],        res: ["Orb of Augmentation", 1] },
-            { nome: "4x Jeweller's → 1x Fusing",        ing: [["Jeweller's Orb", 4]],           res: ["Orb of Fusing", 1] },
-            { nome: "2x Fusing → 1x Jeweller's",        ing: [["Orb of Fusing", 2]],            res: ["Jeweller's Orb", 1] },
-            { nome: "4x Fusing → 1x Chisel",            ing: [["Orb of Fusing", 4]],            res: ["Cartographer's Chisel", 1] },
-            { nome: "20x Chisel → 1x Chaos",            ing: [["Cartographer's Chisel", 20]],   res: ["Chaos Orb", 1] },
-            { nome: "20x Chaos → 1x Exalted",           ing: [["Chaos Orb", 20]],               res: ["Exalted Orb", 1] },
+            { nome: "3x Alteration → 1x Augmentation", ing: [["Orb of Alteration", 3]],      res: ["Orb of Augmentation", 1] },
+            { nome: "4x Jeweller's → 1x Fusing",        ing: [["Jeweller's Orb", 4]],         res: ["Orb of Fusing", 1] },
+            { nome: "2x Fusing → 1x Jeweller's",        ing: [["Orb of Fusing", 2]],          res: ["Jeweller's Orb", 1] },
+            { nome: "4x Fusing → 1x Chisel",            ing: [["Orb of Fusing", 4]],          res: ["Cartographer's Chisel", 1] },
+            { nome: "20x Chisel → 1x Chaos",            ing: [["Cartographer's Chisel", 20]], res: ["Chaos Orb", 1] },
+            { nome: "20x Chaos → 1x Exalted",           ing: [["Chaos Orb", 20]],             res: ["Exalted Orb", 1] },
         ]
 
         document.getElementById("tbl-recipe-currency").innerHTML =
@@ -230,29 +226,30 @@ async function atualizar() {
         const scarabs = buildIndex(scarabData.lines || [])
         const uniques = buildIndex(uniqLines)
 
-        // Index gems por nome|lvlX|qY
+        // ── INDEX GEMS ──
         const gems = {}
         for (const it of gemsData.lines || []) {
-            const lvl = it.gemLevel   ?? 0
-            const q   = it.gemQuality ?? 0
+            const lvl = it.gemLevel   != null ? it.gemLevel   : 0
+            const q   = it.gemQuality != null ? it.gemQuality : 0
             const key = `${it.name}|lvl${lvl}|q${q}`
             if (!gems[key] || it.chaosValue < gems[key]) gems[key] = it.chaosValue
             if (!gems[it.name] || it.chaosValue < gems[it.name]) gems[it.name] = it.chaosValue
         }
 
-const printRecipe = (nome, custo, venda) => {
-    if (custo == null || venda == null || venda <= 0) return null  // remove o custo <= 0
-    const lucro  = venda - custo
-    const margem = custo > 0 ? lucro / custo : 1
-    if (margem < MARGEM) return null
-    return { nome, custo, venda, lucro }
-}
+        // DEBUG: loga as primeiras 10 chaves pra ver o formato real
+        console.log("Amostra de keys gems:", Object.keys(gems).filter(k => k.includes("|")).slice(0, 10))
 
+        const printRecipe = (nome, custo, venda) => {
+            if (custo == null || venda == null || venda <= 0) return null
+            const lucro  = venda - custo
+            const margem = custo > 0 ? lucro / custo : 1
+            if (margem < MARGEM) return null
+            return { nome, custo, venda, lucro }
+        }
 
         // ── PARTE 3: ITEMS -> CURRENCY ──
         const recipesItems = []
 
-        // Gems lvl20 -> lvl1 q20
         const gemsDone = new Set()
         for (const key of Object.keys(gems)) {
             if (!key.includes("|")) continue
@@ -263,11 +260,14 @@ const printRecipe = (nome, custo, venda) => {
             const custo =
                 gems[`${base}|lvl20|q0`]  ??
                 gems[`${base}|lvl20|q00`] ??
-                gems[`${base}|lvl20`]     ?? null
+                null
 
             const resultado =
                 gems[`${base}|lvl1|q20`]  ??
-                gems[`${base}|lvl20|q20`] ?? null
+                gems[`${base}|lvl20|q20`] ??
+                null
+
+            if (custo && !resultado) console.log("Sem resultado:", base, "custo:", custo)
 
             const r = printRecipe(`Gem: ${base} (lvl20 → lvl1 q20)`, custo, resultado)
             if (r) recipesItems.push(r)
